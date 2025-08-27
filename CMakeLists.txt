@@ -394,7 +394,11 @@ endif()
 if(NOT BOLT_CEF_DLLWRAPPER)
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
     find_package(CEF REQUIRED)
-    add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
+    if(NOT TARGET libcef_dll_wrapper)
+        # Some distros (like Fedora) define the libcef_dll_wrapper target in FindCEF.cmake
+        # We check if the target already exists before attempting to add it as a subdirectory
+        add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
+    endif()
 endif()
 
 # select implementations for OS-specific behaviour
@@ -468,11 +472,25 @@ if(UNIX AND NOT APPLE)
     if(NOT BOLT_SKIP_RPATH)
         set_target_properties(bolt PROPERTIES INSTALL_RPATH "$ORIGIN")
     endif()
+
+    if(TARGET CEF::Library)
+        message(STATUS "Linking with FindPackage version of CEF::Library")
+        target_link_libraries(bolt PUBLIC CEF::Library)
+    else()
+        target_link_libraries(bolt PUBLIC "${BOLT_LIBCEF_DIRECTORY}/libcef.so")
+    endif()
+
+    find_package(PkgConfig REQUIRED)
+
+    pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
+    target_link_libraries(bolt PUBLIC PkgConfig::X11)
+
+    pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb)
+    target_link_libraries(bolt PUBLIC PkgConfig::XCB)
+
+    pkg_check_modules(LIBARCHIVE REQUIRED IMPORTED_TARGET libarchive)
+    target_link_libraries(bolt PUBLIC PkgConfig::LIBARCHIVE)
     target_compile_definitions(bolt PUBLIC HAS_LIBARCHIVE)
-    target_link_libraries(bolt PUBLIC "${BOLT_LIBCEF_DIRECTORY}/libcef.so")
-    target_link_libraries(bolt PUBLIC "X11")
-    target_link_libraries(bolt PUBLIC "xcb")
-    target_link_libraries(bolt PUBLIC "archive")
 elseif(WIN32)
     set_target_properties(bolt PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(bolt PUBLIC "${CEF_ROOT}/${CMAKE_BUILD_TYPE}/libcef.lib")
